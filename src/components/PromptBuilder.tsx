@@ -97,7 +97,24 @@ function createGoogleLLM(apiKey: string): LLMApi {
     });
 
     if (!response.ok) {
-      throw new Error(`Google API error: ${response.status} ${response.statusText}`);
+      let errorMessage = `Google API error: ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData?.error?.message) {
+          errorMessage += ` - ${errorData.error.message}`;
+          
+          // Specific handling for API key issues
+          if (errorData.error.message.includes('API key not valid') || 
+              errorData.error.message.includes('API_KEY_INVALID')) {
+            throw new Error('INVALID_API_KEY');
+          }
+        }
+      } catch (parseError) {
+        // If we can't parse the error, just use the status
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -324,20 +341,33 @@ interface APIKeyInputProps {
 function APIKeyInput({ apiKey, setApiKey }: APIKeyInputProps) {
   const [isEditing, setIsEditing] = useState(!apiKey);
   const [draft, setDraft] = useState('');
+  const [error, setError] = useState('');
+
+  const validateApiKey = (key: string): boolean => {
+    // Basic validation for Google API key format
+    return key.startsWith('AIza') && key.length >= 35;
+  };
 
   const handleSave = () => {
-    if (draft.trim()) {
-      setApiKey(draft.trim());
-      localStorage.setItem('google-api-key', draft.trim());
-      setIsEditing(false);
-      setDraft('');
+    if (!draft.trim()) return;
+    
+    if (!validateApiKey(draft.trim())) {
+      setError('Invalid API key format. Google API keys should start with "AIza"');
+      return;
     }
+    
+    setApiKey(draft.trim());
+    localStorage.setItem('google-api-key', draft.trim());
+    setIsEditing(false);
+    setDraft('');
+    setError('');
   };
 
   const handleClear = () => {
     setApiKey('');
     localStorage.removeItem('google-api-key');
     setIsEditing(true);
+    setError('');
   };
 
   const maskedKey = apiKey ? `••••••••••••${apiKey.slice(-4)}` : '';
@@ -358,24 +388,37 @@ function APIKeyInput({ apiKey, setApiKey }: APIKeyInputProps) {
         <div className="space-y-3">
           <Input
             type="password"
-            placeholder="Enter your Google Gemini API key"
+            placeholder="Enter your Google Gemini API key (starts with AIza...)"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setError('');
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSave();
               if (e.key === 'Escape') {
                 setIsEditing(false);
                 setDraft('');
+                setError('');
               }
             }}
-            className="font-mono"
+            className={`font-mono ${error ? 'border-red-500' : ''}`}
           />
+          {error && (
+            <div className="text-sm text-red-600 flex items-center gap-2">
+              ⚠️ {error}
+            </div>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleSave} size="sm" disabled={!draft.trim()}>
               Save Key
             </Button>
             {apiKey && (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+              <Button variant="outline" size="sm" onClick={() => {
+                setIsEditing(false);
+                setDraft('');
+                setError('');
+              }}>
                 Cancel
               </Button>
             )}
@@ -606,12 +649,17 @@ export function PromptBuilder() {
           setSuggestions(result.suggestions || []);
           setLoadingA(false);
         }
-      } catch (error) {
-        if (reqId === completeReqId.current) {
-          setLoadingA(false);
-          console.error('Error getting suggestions:', error);
+        } catch (error) {
+          if (reqId === completeReqId.current) {
+            setLoadingA(false);
+            console.error('Error getting suggestions:', error);
+            
+            // Show user-friendly error for API key issues
+            if (error instanceof Error && error.message === 'INVALID_API_KEY') {
+              alert('⚠️ API Key Invalid\n\nYour Google API key appears to be invalid or expired. Please check your API key and try again.\n\nMake sure your API key:\n• Is correctly copied\n• Has Gemini API access enabled\n• Hasn\'t expired');
+            }
+          }
         }
-      }
     }, 300);
 
     return () => clearTimeout(timer);
@@ -632,6 +680,11 @@ export function PromptBuilder() {
       setSuggestions(result.suggestions || []);
     } catch (error) {
       console.error('Error getting suggestions:', error);
+      
+      // Show user-friendly error for API key issues
+      if (error instanceof Error && error.message === 'INVALID_API_KEY') {
+        alert('⚠️ API Key Invalid\n\nYour Google API key appears to be invalid or expired. Please check your API key and try again.\n\nMake sure your API key:\n• Is correctly copied\n• Has Gemini API access enabled\n• Hasn\'t expired');
+      }
     } finally {
       setLoadingA(false);
     }
@@ -652,6 +705,11 @@ export function PromptBuilder() {
       setSegments(segments);
     } catch (error) {
       console.error('Error enhancing prompt:', error);
+      
+      // Show user-friendly error for API key issues
+      if (error instanceof Error && error.message === 'INVALID_API_KEY') {
+        alert('⚠️ API Key Invalid\n\nYour Google API key appears to be invalid or expired. Please check your API key and try again.\n\nMake sure your API key:\n• Is correctly copied\n• Has Gemini API access enabled\n• Hasn\'t expired');
+      }
     } finally {
       setLoadingB(false);
     }
