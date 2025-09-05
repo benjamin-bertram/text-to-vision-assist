@@ -74,6 +74,101 @@ function inferRole(text: string): TokenRole {
   return "descriptor";
 }
 
+// Google Gemini API integration
+function createGoogleLLM(apiKey: string): LLMApi {
+  const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  
+  async function callGemini(prompt: string): Promise<string> {
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1000,
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+
+  return {
+    async complete(text: string) {
+      const prompt = `You are a creative AI assistant that helps users complete image prompts. Given a partial prompt, provide exactly 3 creative and diverse completions that would make good image generation prompts. 
+
+Return your response as a JSON object with this exact format:
+{"suggestions": ["completion 1", "completion 2", "completion 3"]}
+
+User input: "${text}"`;
+
+      try {
+        const response = await callGemini(prompt);
+        const parsed = JSON.parse(response.replace(/```json\n?|\n?```/g, ''));
+        return { suggestions: (parsed.suggestions || []).slice(0, 3) };
+      } catch (error) {
+        console.error('Error in complete:', error);
+        return { suggestions: [] };
+      }
+    },
+
+    async enhance(selection: string) {
+      const prompt = `Take this image prompt and enhance it with detailed, professional image generation terms. Add specific technical details about lighting, quality, style, and composition that would improve the final image.
+
+Return your response as a JSON object with this exact format:
+{"prompt": "enhanced detailed prompt here"}
+
+Original prompt: "${selection}"`;
+
+      try {
+        const response = await callGemini(prompt);
+        const parsed = JSON.parse(response.replace(/```json\n?|\n?```/g, ''));
+        return { prompt: parsed.prompt || selection };
+      } catch (error) {
+        console.error('Error in enhance:', error);
+        return { prompt: selection };
+      }
+    },
+
+    async alternatives(prompt: string) {
+      const systemPrompt = `Analyze this image generation prompt and identify key tokens that can be replaced with alternatives. For each important token, categorize it as one of: descriptor, quality, mood, action.
+
+Return your response as a JSON object with this exact format:
+{"tokens": [{"text": "word", "role": "category", "alts": ["alt1", "alt2", "alt3", "alt4", "alt5", "alt6"]}]}
+
+Provide exactly 6 alternatives for each token. Focus on the most important and replaceable terms.
+
+Prompt to analyze: "${prompt}"`;
+
+      try {
+        const response = await callGemini(systemPrompt);
+        const parsed = JSON.parse(response.replace(/```json\n?|\n?```/g, ''));
+        const tokens = (parsed.tokens || []).map((token: any) => ({
+          id: uid(),
+          text: token.text,
+          role: token.role as TokenRole,
+          alts: Array.isArray(token.alts) ? token.alts : []
+        }));
+        return { tokens };
+      } catch (error) {
+        console.error('Error in alternatives:', error);
+        return { tokens: [] };
+      }
+    }
+  };
+}
+
 // Mock LLM for demo purposes
 const MockLLM: LLMApi = {
   async complete(text) {
@@ -218,6 +313,100 @@ function buildRawFromSegments(segments: Segment[], tokenMap: Map<string, Token>)
         : tokenMap.get(segment.tokenId)?.text ?? ""
     )
     .join("");
+}
+
+// API Key Management Component
+interface APIKeyInputProps {
+  apiKey: string;
+  setApiKey: (key: string) => void;
+}
+
+function APIKeyInput({ apiKey, setApiKey }: APIKeyInputProps) {
+  const [isEditing, setIsEditing] = useState(!apiKey);
+  const [draft, setDraft] = useState('');
+
+  const handleSave = () => {
+    if (draft.trim()) {
+      setApiKey(draft.trim());
+      localStorage.setItem('google-api-key', draft.trim());
+      setIsEditing(false);
+      setDraft('');
+    }
+  };
+
+  const handleClear = () => {
+    setApiKey('');
+    localStorage.removeItem('google-api-key');
+    setIsEditing(true);
+  };
+
+  const maskedKey = apiKey ? `••••••••••••${apiKey.slice(-4)}` : '';
+
+  return (
+    <div className="mb-6 p-4 rounded-xl border bg-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold">Google Gemini API Key</h3>
+        {apiKey && (
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <span className="text-xs text-muted-foreground">Connected</span>
+          </div>
+        )}
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-3">
+          <Input
+            type="password"
+            placeholder="Enter your Google Gemini API key"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSave();
+              if (e.key === 'Escape') {
+                setIsEditing(false);
+                setDraft('');
+              }
+            }}
+            className="font-mono"
+          />
+          <div className="flex gap-2">
+            <Button onClick={handleSave} size="sm" disabled={!draft.trim()}>
+              Save Key
+            </Button>
+            {apiKey && (
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Your API key is stored locally in your browser and never sent to our servers.{' '}
+            <a 
+              href="https://aistudio.google.com/app/apikey" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Get your free API key here →
+            </a>
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-sm">{maskedKey}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+              Edit
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              Remove
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // UI Components
@@ -367,12 +556,26 @@ export function PromptBuilder() {
   const [loadingA, setLoadingA] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [live, setLive] = useState(true);
+  const [apiKey, setApiKey] = useState("");
 
   const [selection, setSelection] = useState<string | null>(null);
   const [loadingB, setLoadingB] = useState(false);
   const [promptDoc, setPromptDoc] = useState<PromptDoc | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [openTokenId, setOpenTokenId] = useState<string | null>(null);
+
+  // Load API key from localStorage on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem('google-api-key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    }
+  }, []);
+
+  // Get the appropriate LLM based on API key availability
+  const getLLM = (): LLMApi => {
+    return apiKey ? createGoogleLLM(apiKey) : MockLLM;
+  };
 
   const tokenMap = useMemo(() => 
     new Map((promptDoc?.tokens ?? []).map(token => [token.id, token])),
@@ -397,7 +600,8 @@ export function PromptBuilder() {
     
     const timer = setTimeout(async () => {
       try {
-        const result = await MockLLM.complete(query);
+        const llm = getLLM();
+        const result = await llm.complete(query);
         if (reqId === completeReqId.current) {
           setSuggestions(result.suggestions || []);
           setLoadingA(false);
@@ -405,12 +609,13 @@ export function PromptBuilder() {
       } catch (error) {
         if (reqId === completeReqId.current) {
           setLoadingA(false);
+          console.error('Error getting suggestions:', error);
         }
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [input, live]);
+  }, [input, live, apiKey]);
 
   const handleSuggest = async () => {
     setOpenTokenId(null);
@@ -422,8 +627,11 @@ export function PromptBuilder() {
 
     setLoadingA(true);
     try {
-      const result = await MockLLM.complete(input);
+      const llm = getLLM();
+      const result = await llm.complete(input);
       setSuggestions(result.suggestions || []);
+    } catch (error) {
+      console.error('Error getting suggestions:', error);
     } finally {
       setLoadingA(false);
     }
@@ -434,13 +642,16 @@ export function PromptBuilder() {
     setLoadingB(true);
 
     try {
-      const enhanced = await MockLLM.enhance(suggestion);
-      const altResult = await MockLLM.alternatives(enhanced.prompt);
+      const llm = getLLM();
+      const enhanced = await llm.enhance(suggestion);
+      const altResult = await llm.alternatives(enhanced.prompt);
       
       const segments = segmentPrompt(enhanced.prompt, altResult.tokens);
       
       setPromptDoc({ raw: enhanced.prompt, tokens: altResult.tokens });
       setSegments(segments);
+    } catch (error) {
+      console.error('Error enhancing prompt:', error);
     } finally {
       setLoadingB(false);
     }
@@ -468,7 +679,6 @@ export function PromptBuilder() {
     
     try {
       await navigator.clipboard.writeText(promptDoc.raw);
-      // You could add a toast notification here
       alert("Copied to clipboard!");
     } catch (error) {
       console.error("Failed to copy:", error);
@@ -487,6 +697,9 @@ export function PromptBuilder() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <Header live={live} setLive={setLive} />
+
+      {/* API Key Input */}
+      <APIKeyInput apiKey={apiKey} setApiKey={setApiKey} />
 
       {/* Input Section */}
       <div className="space-y-6">
@@ -510,12 +723,27 @@ export function PromptBuilder() {
         </div>
 
         {/* Live preview hint */}
-        <div className="min-h-[24px] text-sm text-muted-foreground">
-          {loadingA ? (
-            <span className="animate-pulse">Finding suggestions...</span>
-          ) : suggestions[0] ? (
-            <span className="opacity-70">→ {suggestions[0]}</span>
-          ) : null}
+        <div className="min-h-[24px] text-sm text-muted-foreground flex items-center justify-between">
+          <div>
+            {loadingA ? (
+              <span className="animate-pulse">Finding suggestions...</span>
+            ) : suggestions[0] ? (
+              <span className="opacity-70">→ {suggestions[0]}</span>
+            ) : null}
+          </div>
+          <div className="text-xs">
+            {apiKey ? (
+              <span className="text-green-600 flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                Using Gemini API
+              </span>
+            ) : (
+              <span className="text-amber-600 flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                Demo mode
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Suggestion chips */}
