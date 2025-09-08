@@ -118,7 +118,13 @@ function createGoogleLLM(apiKey: string): LLMApi {
     }
 
     const data = await response.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    if (!responseText.trim()) {
+      throw new Error('Empty response from Google API');
+    }
+    
+    return responseText;
   }
 
   return {
@@ -132,7 +138,13 @@ User input: "${text}"`;
 
       try {
         const response = await callGemini(prompt);
-        const parsed = JSON.parse(response.replace(/```json\n?|\n?```/g, ''));
+        // Clean response - remove code blocks and extra whitespace
+        const cleanResponse = response
+          .replace(/```json\n?|\n?```/g, '')
+          .replace(/```\n?|\n?```/g, '')
+          .trim();
+        
+        const parsed = JSON.parse(cleanResponse);
         return { suggestions: (parsed.suggestions || []).slice(0, 3) };
       } catch (error) {
         console.error('Error in complete:', error);
@@ -150,7 +162,13 @@ Original prompt: "${selection}"`;
 
       try {
         const response = await callGemini(prompt);
-        const parsed = JSON.parse(response.replace(/```json\n?|\n?```/g, ''));
+        // Clean response - remove code blocks and extra whitespace
+        const cleanResponse = response
+          .replace(/```json\n?|\n?```/g, '')
+          .replace(/```\n?|\n?```/g, '')
+          .trim();
+        
+        const parsed = JSON.parse(cleanResponse);
         return { prompt: parsed.prompt || selection };
       } catch (error) {
         console.error('Error in enhance:', error);
@@ -170,7 +188,26 @@ Prompt to analyze: "${prompt}"`;
 
       try {
         const response = await callGemini(systemPrompt);
-        const parsed = JSON.parse(response.replace(/```json\n?|\n?```/g, ''));
+        // Clean response - remove code blocks and extra whitespace
+        const cleanResponse = response
+          .replace(/```json\n?|\n?```/g, '')
+          .replace(/```\n?|\n?```/g, '')
+          .trim();
+        
+        let parsed;
+        try {
+          parsed = JSON.parse(cleanResponse);
+        } catch (parseError) {
+          console.error('JSON parsing failed, trying to extract JSON from response:', cleanResponse);
+          // Try to extract JSON from the response if it's embedded in text
+          const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0]);
+          } else {
+            throw parseError;
+          }
+        }
+        
         const tokens = (parsed.tokens || []).map((token: any) => ({
           id: uid(),
           text: token.text,
