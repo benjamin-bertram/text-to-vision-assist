@@ -30,6 +30,69 @@ const uid = () => `token-${Date.now()}-${++idCounter}`;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Extract fallback tokens when API fails
+function extractFallbackTokens(prompt: string): { tokens: Token[] } {
+  const commonTerms = [
+    "high quality", "ultra detailed", "studio lighting", "cinematic", 
+    "dramatic", "portrait", "landscape", "detailed", "realistic",
+    "professional", "artistic", "beautiful", "stunning", "masterpiece"
+  ];
+  
+  const foundTokens: Token[] = [];
+  const words = prompt.toLowerCase().split(/\s+/);
+  
+  // Look for multi-word terms first
+  for (const term of commonTerms) {
+    if (prompt.toLowerCase().includes(term)) {
+      foundTokens.push({
+        id: uid(),
+        text: term,
+        role: inferRole(term),
+        alts: getDefaultAlternatives(term)
+      });
+    }
+  }
+  
+  // Add some individual significant words
+  const significantWords = words.filter(word => 
+    word.length > 4 && !['with', 'from', 'that', 'this', 'they', 'have', 'will', 'been', 'were'].includes(word)
+  ).slice(0, 6);
+  
+  for (const word of significantWords) {
+    if (!foundTokens.some(token => token.text.toLowerCase().includes(word))) {
+      foundTokens.push({
+        id: uid(),
+        text: word,
+        role: inferRole(word),
+        alts: getDefaultAlternatives(word)
+      });
+    }
+  }
+  
+  return { tokens: foundTokens.slice(0, 8) };
+}
+
+function getDefaultAlternatives(term: string): string[] {
+  const altMap: Record<string, string[]> = {
+    "high quality": ["premium", "photoreal", "film-grade", "clean", "polished", "pristine"],
+    "ultra detailed": ["intricate", "highly detailed", "fine detail", "micro-detail", "ornate", "textured"],
+    "studio lighting": ["natural light", "softbox", "rim light", "backlit", "hard light", "volumetric"],
+    "cinematic": ["filmic", "dramatic", "epic", "documentary", "stylized", "artistic"],
+    "dramatic": ["subtle", "intense", "moody", "striking", "bold", "understated"],
+    "portrait": ["headshot", "close-up", "bust", "profile", "three-quarter", "candid"],
+    "landscape": ["scenery", "vista", "panorama", "terrain", "countryside", "seascape"],
+    "detailed": ["intricate", "elaborate", "thorough", "precise", "meticulous", "refined"],
+    "realistic": ["lifelike", "natural", "authentic", "true-to-life", "photographic", "believable"],
+    "professional": ["expert", "polished", "commercial", "studio-quality", "refined", "masterful"],
+    "artistic": ["creative", "expressive", "stylized", "aesthetic", "imaginative", "inspired"],
+    "beautiful": ["stunning", "gorgeous", "elegant", "graceful", "lovely", "attractive"],
+    "stunning": ["breathtaking", "magnificent", "spectacular", "impressive", "striking", "remarkable"],
+    "masterpiece": ["work of art", "tour de force", "magnum opus", "classic", "exemplary", "outstanding"]
+  };
+  
+  return altMap[term.toLowerCase()] || ["enhanced", "improved", "refined", "elevated", "sophisticated", "polished"];
+}
+
 // Token styling configuration
 const ROLE_COLORS: Record<TokenRole, string> = {
   descriptor: "bg-token-descriptor-bg text-token-descriptor border-token-descriptor-border underline decoration-token-descriptor/70",
@@ -76,7 +139,7 @@ function inferRole(text: string): TokenRole {
 
 // Google Gemini API integration
 function createGoogleLLM(apiKey: string): LLMApi {
-  const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
   
   async function callGemini(prompt: string): Promise<string> {
     const response = await fetch(baseUrl, {
@@ -734,7 +797,13 @@ export function PromptBuilder() {
     try {
       const llm = getLLM();
       const enhanced = await llm.enhance(suggestion);
-      const altResult = await llm.alternatives(enhanced.prompt);
+      let altResult = await llm.alternatives(enhanced.prompt);
+      
+      // Fallback: if no tokens from API, extract some basic ones from the text
+      if (!altResult.tokens || altResult.tokens.length === 0) {
+        console.log('No tokens from API, extracting fallback tokens');
+        altResult = extractFallbackTokens(enhanced.prompt);
+      }
       
       const segments = segmentPrompt(enhanced.prompt, altResult.tokens);
       
@@ -746,6 +815,15 @@ export function PromptBuilder() {
       // Show user-friendly error for API key issues
       if (error instanceof Error && error.message === 'INVALID_API_KEY') {
         alert('⚠️ API Key Invalid\n\nYour Google API key appears to be invalid or expired. Please check your API key and try again.\n\nMake sure your API key:\n• Is correctly copied\n• Has Gemini API access enabled\n• Hasn\'t expired');
+      } else {
+        // Fallback: use the original suggestion and extract basic tokens
+        console.log('API failed, using fallback enhancement and tokens');
+        const fallbackPrompt = `${suggestion} — high quality, ultra detailed, studio lighting, cinematic`;
+        const fallbackTokens = extractFallbackTokens(fallbackPrompt);
+        const segments = segmentPrompt(fallbackPrompt, fallbackTokens.tokens);
+        
+        setPromptDoc({ raw: fallbackPrompt, tokens: fallbackTokens.tokens });
+        setSegments(segments);
       }
     } finally {
       setLoadingB(false);
