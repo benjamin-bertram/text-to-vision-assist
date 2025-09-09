@@ -31,67 +31,124 @@ const uid = () => `token-${Date.now()}-${++idCounter}`;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Extract fallback tokens when API fails
+// Extract fallback tokens when API fails - comprehensive extraction across all categories
 function extractFallbackTokens(prompt: string): { tokens: Token[] } {
-  const commonTerms = [
-    "high quality", "ultra detailed", "studio lighting", "cinematic", 
-    "dramatic", "portrait", "landscape", "detailed", "realistic",
-    "professional", "artistic", "beautiful", "stunning", "masterpiece"
-  ];
-  
   const foundTokens: Token[] = [];
   const words = prompt.toLowerCase().split(/\s+/);
+  const fullPrompt = prompt.toLowerCase();
   
-  // Look for multi-word terms first
-  for (const term of commonTerms) {
-    if (prompt.toLowerCase().includes(term)) {
-      foundTokens.push({
-        id: uid(),
-        text: term,
-        role: inferRole(term),
-        alts: getDefaultAlternatives(term)
-      });
+  // Category-specific terms for comprehensive token extraction
+  const categoryTerms: Record<TokenRole, string[]> = {
+    genre: ["portrait", "landscape", "character", "product", "narrative", "scene", "architecture", "photographic"],
+    subject: ["person", "man", "woman", "child", "cat", "dog", "car", "building", "tree", "mountain", "persian", "fluffy"],
+    attributes: ["young", "old", "tall", "short", "beautiful", "elegant", "rugged", "sleek", "modern", "vintage", "intense"],
+    action: ["running", "jumping", "sitting", "standing", "smiling", "crying", "dancing", "flying", "pose", "expression"],
+    setting: ["forest", "city", "beach", "studio", "office", "home", "park", "street", "room", "outdoor", "indoor"],
+    composition: ["close-up", "wide shot", "rule of thirds", "centered", "framing", "depth", "leading lines", "symmetry"],
+    perspective: ["50mm", "85mm", "wide angle", "telephoto", "macro", "fisheye", "aerial", "ground level", "lens"],
+    lighting: ["golden hour", "soft light", "harsh light", "rim light", "backlit", "studio lighting", "natural light", "dramatic"],
+    color: ["warm tones", "cool tones", "vibrant", "muted", "monochrome", "pastel", "neon", "earthy"],
+    style: ["oil painting", "photography", "digital art", "watercolor", "pencil", "3D render", "CGI", "hyperrealistic"],
+    mood: ["dramatic", "peaceful", "energetic", "melancholy", "joyful", "mysterious", "romantic", "melancholic"],
+    quality: ["high quality", "8k", "ultra detailed", "sharp focus", "highly detailed", "masterpiece", "intricate", "photorealistic"]
+  };
+  
+  // Extract multi-word terms first for each category
+  for (const [role, terms] of Object.entries(categoryTerms)) {
+    for (const term of terms) {
+      if (fullPrompt.includes(term) && !foundTokens.some(t => t.text === term)) {
+        foundTokens.push({
+          id: uid(),
+          text: term,
+          role: role as TokenRole,
+          alts: getDefaultAlternatives(term, role as TokenRole)
+        });
+      }
     }
   }
   
-  // Add some individual significant words
+  // Add individual significant words, ensuring category diversity
   const significantWords = words.filter(word => 
-    word.length > 4 && !['with', 'from', 'that', 'this', 'they', 'have', 'will', 'been', 'were'].includes(word)
-  ).slice(0, 6);
+    word.length > 3 && !['with', 'from', 'that', 'this', 'they', 'have', 'will', 'been', 'were', 'very', 'much', 'more'].includes(word)
+  );
   
   for (const word of significantWords) {
-    if (!foundTokens.some(token => token.text.toLowerCase().includes(word))) {
+    if (!foundTokens.some(token => token.text.toLowerCase().includes(word)) && foundTokens.length < 12) {
+      const role = inferRole(word);
       foundTokens.push({
         id: uid(),
         text: word,
-        role: inferRole(word),
-        alts: getDefaultAlternatives(word)
+        role,
+        alts: getDefaultAlternatives(word, role)
       });
     }
   }
   
-  return { tokens: foundTokens.slice(0, 8) };
-}
-
-function getDefaultAlternatives(term: string): string[] {
-  const altMap: Record<string, string[]> = {
-    "high quality": ["premium", "photoreal", "film-grade", "clean", "polished", "pristine"],
-    "ultra detailed": ["intricate", "highly detailed", "fine detail", "micro-detail", "ornate", "textured"],
-    "studio lighting": ["natural light", "softbox", "rim light", "backlit", "hard light", "volumetric"],
-    "cinematic": ["filmic", "dramatic", "epic", "documentary", "stylized", "artistic"],
-    "dramatic": ["subtle", "intense", "moody", "striking", "bold", "understated"],
-    "portrait": ["headshot", "close-up", "bust", "profile", "three-quarter", "candid"],
-    "landscape": ["scenery", "vista", "panorama", "terrain", "countryside", "seascape"],
-    "detailed": ["intricate", "elaborate", "thorough", "precise", "meticulous", "refined"],
-    "realistic": ["lifelike", "natural", "authentic", "true-to-life", "photographic", "believable"],
-    "professional": ["expert", "polished", "commercial", "studio-quality", "refined", "masterful"],
-    "artistic": ["creative", "expressive", "stylized", "aesthetic", "imaginative", "inspired"],
-    "beautiful": ["stunning", "gorgeous", "elegant", "graceful", "lovely", "attractive"],
-    "stunning": ["breathtaking", "magnificent", "spectacular", "impressive", "striking", "remarkable"],
-    "masterpiece": ["work of art", "tour de force", "magnum opus", "classic", "exemplary", "outstanding"]
+  // Ensure we have tokens from different categories
+  const roleCount: Record<TokenRole, number> = {
+    genre: 0, subject: 0, attributes: 0, action: 0, setting: 0, composition: 0,
+    perspective: 0, lighting: 0, color: 0, style: 0, mood: 0, quality: 0
   };
   
-  return altMap[term.toLowerCase()] || ["enhanced", "improved", "refined", "elevated", "sophisticated", "polished"];
+  foundTokens.forEach(token => roleCount[token.role]++);
+  
+  return { tokens: foundTokens.slice(0, 15) };
+}
+
+function getDefaultAlternatives(term: string, role?: TokenRole): string[] {
+  // Category-specific alternatives
+  const categoryAlts: Record<TokenRole, string[]> = {
+    genre: ["portrait", "landscape", "character", "product", "narrative", "scene"],
+    subject: ["person", "figure", "character", "individual", "model", "subject"],
+    attributes: ["elegant", "modern", "vintage", "sleek", "rugged", "refined"],
+    action: ["posing", "moving", "gesturing", "expressing", "performing", "demonstrating"],
+    setting: ["studio", "outdoor", "indoor", "natural", "urban", "architectural"],
+    composition: ["centered", "off-center", "rule of thirds", "symmetrical", "dynamic", "balanced"],
+    perspective: ["wide angle", "telephoto", "macro", "aerial", "eye-level", "low angle"],
+    lighting: ["soft light", "hard light", "natural light", "studio light", "ambient", "directional"],
+    color: ["warm tones", "cool tones", "vibrant", "muted", "monochrome", "saturated"],
+    style: ["photographic", "artistic", "cinematic", "documentary", "commercial", "fine art"],
+    mood: ["dramatic", "serene", "energetic", "mysterious", "joyful", "contemplative"],
+    quality: ["high detail", "sharp focus", "pristine", "professional", "masterful", "exceptional"]
+  };
+  
+  // Term-specific alternatives
+  const altMap: Record<string, string[]> = {
+    // Quality terms
+    "high quality": ["premium", "photoreal", "film-grade", "clean", "polished", "pristine"],
+    "ultra detailed": ["intricate", "highly detailed", "fine detail", "micro-detail", "ornate", "textured"],
+    "photorealistic": ["lifelike", "realistic", "authentic", "natural", "true-to-life", "believable"],
+    "masterpiece": ["work of art", "tour de force", "magnum opus", "classic", "exemplary", "outstanding"],
+    
+    // Lighting terms
+    "studio lighting": ["natural light", "softbox", "rim light", "backlit", "hard light", "volumetric"],
+    "dramatic": ["moody", "intense", "striking", "bold", "atmospheric", "cinematic"],
+    "golden hour": ["magic hour", "sunset", "sunrise", "warm light", "evening light", "dusk"],
+    
+    // Style terms
+    "photographic": ["realistic", "documentary", "journalistic", "candid", "editorial", "commercial"],
+    "hyperrealistic": ["ultra-realistic", "photoreal", "lifelike", "detailed", "precise", "accurate"],
+    
+    // Composition terms
+    "close-up": ["tight shot", "macro", "detail shot", "intimate", "focused", "cropped"],
+    "wide shot": ["panoramic", "landscape", "establishing", "full frame", "expansive", "broad"],
+    
+    // Color terms
+    "warm tones": ["golden", "amber", "sunset", "cozy", "inviting", "soft"],
+    "cool tones": ["blue", "cyan", "crisp", "fresh", "clinical", "modern"],
+    
+    // Subject terms
+    "persian": ["exotic", "feline", "elegant", "fluffy", "longhaired", "majestic"],
+    "fluffy": ["soft", "furry", "plush", "downy", "fuzzy", "voluminous"],
+    "intense": ["piercing", "focused", "sharp", "penetrating", "compelling", "captivating"]
+  };
+  
+  // Use role-specific alternatives if role is provided and no specific term match
+  if (role && !altMap[term.toLowerCase()]) {
+    return categoryAlts[role];
+  }
+  
+  return altMap[term.toLowerCase()] || categoryAlts[role || "quality"] || ["enhanced", "improved", "refined", "elevated", "sophisticated", "polished"];
 }
 
 // Token styling configuration
@@ -110,54 +167,54 @@ const ROLE_COLORS: Record<TokenRole, string> = {
   quality: "bg-token-action-bg text-token-action border-token-action-border underline decoration-token-action/70",
 };
 
-// Keyword-based role inference
+// Expanded keyword-based role inference for comprehensive categorization
 const KEYWORD_ROLE: Array<{ pattern: RegExp; role: TokenRole }> = [
   { 
-    pattern: /(portrait|landscape|character|product|narrative|scene|architecture)/gi, 
+    pattern: /(portrait|landscape|character|product|narrative|scene|architecture|photographic|street|documentary)/gi, 
     role: "genre" 
   },
   { 
-    pattern: /(person|man|woman|child|cat|dog|car|building|tree|mountain|ocean)/gi, 
+    pattern: /(person|man|woman|child|cat|dog|car|building|tree|mountain|ocean|persian|individual|figure|model)/gi, 
     role: "subject" 
   },
   { 
-    pattern: /(young|old|tall|short|beautiful|elegant|rugged|sleek|modern|vintage)/gi, 
+    pattern: /(young|old|tall|short|beautiful|elegant|rugged|sleek|modern|vintage|intense|fluffy|majestic|exotic)/gi, 
     role: "attributes" 
   },
   { 
-    pattern: /(running|jumping|sitting|standing|smiling|crying|dancing|flying)/gi, 
+    pattern: /(running|jumping|sitting|standing|smiling|crying|dancing|flying|posing|gesturing|expression|gaze)/gi, 
     role: "action" 
   },
   { 
-    pattern: /(forest|city|beach|studio|office|home|park|street|room|outdoor)/gi, 
+    pattern: /(forest|city|beach|studio|office|home|park|street|room|outdoor|indoor|urban|natural|environment)/gi, 
     role: "setting" 
   },
   { 
-    pattern: /(close-up|wide shot|rule of thirds|centered|framing|depth)/gi, 
+    pattern: /(close-up|wide shot|rule of thirds|centered|framing|depth|leading lines|symmetry|balance|composition)/gi, 
     role: "composition" 
   },
   { 
-    pattern: /(50mm|85mm|wide angle|telephoto|macro|fisheye|aerial|ground level)/gi, 
+    pattern: /(50mm|85mm|wide angle|telephoto|macro|fisheye|aerial|ground level|lens|perspective|viewpoint|angle)/gi, 
     role: "perspective" 
   },
   { 
-    pattern: /(golden hour|soft light|harsh light|rim light|backlit|studio lighting|natural light)/gi, 
+    pattern: /(golden hour|soft light|harsh light|rim light|backlit|studio lighting|natural light|dramatic|chiaroscuro|ambient)/gi, 
     role: "lighting" 
   },
   { 
-    pattern: /(warm tones|cool tones|vibrant|muted|monochrome|pastel|neon|earthy)/gi, 
+    pattern: /(warm tones|cool tones|vibrant|muted|monochrome|pastel|neon|earthy|palette|color|hue|saturation)/gi, 
     role: "color" 
   },
   { 
-    pattern: /(oil painting|photography|digital art|watercolor|pencil|3D render|CGI)/gi, 
+    pattern: /(oil painting|photography|digital art|watercolor|pencil|3D render|CGI|hyperrealistic|photorealistic|artistic)/gi, 
     role: "style" 
   },
   { 
-    pattern: /(dramatic|peaceful|energetic|melancholy|joyful|mysterious|romantic)/gi, 
+    pattern: /(dramatic|peaceful|energetic|melancholy|joyful|mysterious|romantic|serene|moody|contemplative|melancholic)/gi, 
     role: "mood" 
   },
   { 
-    pattern: /(high quality|8k|ultra detail|sharp focus|highly detailed|masterpiece)/gi, 
+    pattern: /(high quality|8k|ultra detail|sharp focus|highly detailed|masterpiece|intricate|pristine|professional|premium)/gi, 
     role: "quality" 
   },
 ];
@@ -300,12 +357,25 @@ Transform: "${selection}"`;
     },
 
     async alternatives(prompt: string) {
-      const systemPrompt = `Analyze this image generation prompt and identify key tokens that can be replaced with alternatives. For each important token, categorize it as one of: descriptor, quality, mood, action.
+      const systemPrompt = `Analyze this image generation prompt and identify key tokens that can be replaced with alternatives. Categorize each token using these 12 specific categories:
+
+- genre: Type of image (portrait, landscape, product, etc.)
+- subject: Main subject/object being depicted
+- attributes: Descriptive qualities of the subject
+- action: What the subject is doing
+- setting: Location/environment
+- composition: Framing and visual arrangement
+- perspective: Camera angle, lens type
+- lighting: Light quality, direction, mood
+- color: Color palette, tone, saturation
+- style: Artistic medium, rendering style
+- mood: Emotional atmosphere, feeling
+- quality: Technical quality, detail level
 
 Return your response as a JSON object with this exact format:
 {"tokens": [{"text": "word", "role": "category", "alts": ["alt1", "alt2", "alt3", "alt4", "alt5", "alt6"]}]}
 
-Provide exactly 6 alternatives for each token. Focus on the most important and replaceable terms.
+Provide exactly 6 alternatives for each token. Extract 10-15 tokens across different categories. Focus on the most important and replaceable terms.
 
 Prompt to analyze: "${prompt}"`;
 
@@ -340,7 +410,8 @@ Prompt to analyze: "${prompt}"`;
         return { tokens };
       } catch (error) {
         console.error('Error in alternatives:', error);
-        return { tokens: [] };
+        // Enhanced fallback with comprehensive token extraction
+        return extractFallbackTokens(prompt);
       }
     }
   };
