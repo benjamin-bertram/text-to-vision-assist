@@ -4,7 +4,8 @@ import { Input } from "./ui/input";
 
 // Types
 type Suggestion = string;
-type TokenRole = "descriptor" | "quality" | "mood" | "action";
+type ModelType = "sdxl" | "flux";
+type TokenRole = "genre" | "subject" | "attributes" | "action" | "setting" | "composition" | "perspective" | "lighting" | "color" | "style" | "mood" | "quality";
 
 type Token = { 
   id: string; 
@@ -20,7 +21,7 @@ type PromptDoc = {
 
 type LLMApi = {
   complete(text: string): Promise<{ suggestions: Suggestion[] }>;
-  enhance(selection: string): Promise<{ prompt: string }>;
+  enhance(selection: string, modelType: ModelType): Promise<{ prompt: string }>;
   alternatives(prompt: string): Promise<{ tokens: Token[] }>;
 };
 
@@ -95,29 +96,69 @@ function getDefaultAlternatives(term: string): string[] {
 
 // Token styling configuration
 const ROLE_COLORS: Record<TokenRole, string> = {
-  descriptor: "bg-token-descriptor-bg text-token-descriptor border-token-descriptor-border underline decoration-token-descriptor/70",
-  quality: "bg-token-quality-bg text-token-quality border-token-quality-border underline decoration-token-quality/70", 
-  mood: "bg-token-mood-bg text-token-mood border-token-mood-border underline decoration-token-mood/70",
+  genre: "bg-token-descriptor-bg text-token-descriptor border-token-descriptor-border underline decoration-token-descriptor/70",
+  subject: "bg-token-quality-bg text-token-quality border-token-quality-border underline decoration-token-quality/70",
+  attributes: "bg-token-mood-bg text-token-mood border-token-mood-border underline decoration-token-mood/70",
   action: "bg-token-action-bg text-token-action border-token-action-border underline decoration-token-action/70",
+  setting: "bg-token-descriptor-bg text-token-descriptor border-token-descriptor-border underline decoration-token-descriptor/70",
+  composition: "bg-token-quality-bg text-token-quality border-token-quality-border underline decoration-token-quality/70",
+  perspective: "bg-token-mood-bg text-token-mood border-token-mood-border underline decoration-token-mood/70",
+  lighting: "bg-token-action-bg text-token-action border-token-action-border underline decoration-token-action/70",
+  color: "bg-token-descriptor-bg text-token-descriptor border-token-descriptor-border underline decoration-token-descriptor/70",
+  style: "bg-token-quality-bg text-token-quality border-token-quality-border underline decoration-token-quality/70",
+  mood: "bg-token-mood-bg text-token-mood border-token-mood-border underline decoration-token-mood/70",
+  quality: "bg-token-action-bg text-token-action border-token-action-border underline decoration-token-action/70",
 };
 
 // Keyword-based role inference
 const KEYWORD_ROLE: Array<{ pattern: RegExp; role: TokenRole }> = [
   { 
-    pattern: /(high\s+quality|8k|ultra\s+detail|studio\s+lighting|volumetric|rim\s+light|softbox|hard\s+light|backlit|bokeh)/gi, 
-    role: "quality" 
+    pattern: /(portrait|landscape|character|product|narrative|scene|architecture)/gi, 
+    role: "genre" 
   },
   { 
-    pattern: /(chiaroscuro|cinematic|cool\s+tones|warm\s+tones|neon|pastel|monochrome|earthy|desaturated|moody|vibrant)/gi, 
-    role: "mood" 
+    pattern: /(person|man|woman|child|cat|dog|car|building|tree|mountain|ocean)/gi, 
+    role: "subject" 
   },
   { 
-    pattern: /(carved|woven|forged|grown|assembled|whittled|sculpted|panning|tilt|dolly|zoom|tracking|orbiting)/gi, 
+    pattern: /(young|old|tall|short|beautiful|elegant|rugged|sleek|modern|vintage)/gi, 
+    role: "attributes" 
+  },
+  { 
+    pattern: /(running|jumping|sitting|standing|smiling|crying|dancing|flying)/gi, 
     role: "action" 
   },
   { 
-    pattern: /(dress|gown|armor|cat|city|forest|portrait|mountain|desert|robot|mask|character|creature|temple|street)/gi, 
-    role: "descriptor" 
+    pattern: /(forest|city|beach|studio|office|home|park|street|room|outdoor)/gi, 
+    role: "setting" 
+  },
+  { 
+    pattern: /(close-up|wide shot|rule of thirds|centered|framing|depth)/gi, 
+    role: "composition" 
+  },
+  { 
+    pattern: /(50mm|85mm|wide angle|telephoto|macro|fisheye|aerial|ground level)/gi, 
+    role: "perspective" 
+  },
+  { 
+    pattern: /(golden hour|soft light|harsh light|rim light|backlit|studio lighting|natural light)/gi, 
+    role: "lighting" 
+  },
+  { 
+    pattern: /(warm tones|cool tones|vibrant|muted|monochrome|pastel|neon|earthy)/gi, 
+    role: "color" 
+  },
+  { 
+    pattern: /(oil painting|photography|digital art|watercolor|pencil|3D render|CGI)/gi, 
+    role: "style" 
+  },
+  { 
+    pattern: /(dramatic|peaceful|energetic|melancholy|joyful|mysterious|romantic)/gi, 
+    role: "mood" 
+  },
+  { 
+    pattern: /(high quality|8k|ultra detail|sharp focus|highly detailed|masterpiece)/gi, 
+    role: "quality" 
   },
 ];
 
@@ -127,14 +168,16 @@ function inferRole(text: string): TokenRole {
   }
   
   // Fallback heuristics
-  if (/\b(ly|ic|ous|ful|ish|ive)\b/i.test(text) || /light|tone|quality|detail/i.test(text)) 
+  if (/\b(ly|ic|ous|ful|ish|ive)\b/i.test(text) || /quality|detail|sharp|crisp/i.test(text)) 
     return "quality";
-  if (/\b(run|fly|carved|forged|grown|shoot|tilt|pan|zoom|orbit|track|hold)\b/i.test(text)) 
+  if (/\b(run|fly|jump|sit|stand|dance|move)\b/i.test(text)) 
     return "action";
-  if (/\b(moody|warm|cool|neon|pastel|earthy|grim|bright|soft|harsh)\b/i.test(text)) 
+  if (/\b(mood|feel|atmosphere|vibe|emotion)\b/i.test(text)) 
     return "mood";
+  if (/\b(style|medium|art|paint|photo)\b/i.test(text)) 
+    return "style";
   
-  return "descriptor";
+  return "subject";
 }
 
 // Google Gemini API integration
@@ -215,17 +258,34 @@ User input: "${text}"`;
       }
     },
 
-    async enhance(selection: string) {
-      const prompt = `Take this image prompt and enhance it with detailed, professional image generation terms. Add specific technical details about lighting, quality, style, and composition that would improve the final image.
+    async enhance(selection: string, modelType: ModelType) {
+      const isSDXL = modelType === 'sdxl';
+      
+      const prompt = isSDXL 
+        ? `Transform this basic prompt into a structured SDXL prompt using this template: "{GENRE} of {SUBJECT}, {KEY ATTRIBUTES}, {ACTION/SETTING}, {COMPOSITION}, {PERSPECTIVE/LENS}, {LIGHTING}, {COLOR}, {STYLE/MEDIUM}, {MOOD}, {QUALITY BOOSTERS}"
 
-Return your response as a JSON object with this exact format:
-{"prompt": "enhanced detailed prompt here"}
+Examples:
+- Portrait: "portrait of young woman, elegant dress, confident pose, close-up framing, 85mm lens, soft natural light, warm tones, oil painting style, serene mood, highly detailed, sharp focus"
+- Landscape: "landscape of mountain valley, snow-capped peaks, golden hour, wide shot, 24mm lens, atmospheric perspective, warm golden light, earthy palette, photographic style, peaceful mood, high dynamic range"
 
-Original prompt: "${selection}"`;
+Return JSON format: {"prompt": "structured prompt here"}
+
+Transform: "${selection}"`
+        : `Transform this basic prompt into natural prose for Flux/Qwen (150-200 words). Structure in short paragraphs:
+1. One-line purpose + genre + subject
+2. Attributes + action + setting (time/place/weather)  
+3. Composition & perspective (framing, depth, lens, spacing)
+4. Lighting & color (type, direction, mood, palette)
+5. Style/medium & quality (technique, textures, fidelity)
+
+Example: "A character portrait of a wise elder. Weathered face, kind eyes, worn leather jacket, gentle smile. The portrait is placed in a cozy library with warm lamplight, framed as a close-up, camera at eye level, shallow depth of field. Light with soft window light from the left side creating gentle shadows. The image uses warm golden tones to convey comfort and wisdom. Style is photographic realism with fine skin texture and sharp detail."
+
+Return JSON format: {"prompt": "natural prose here"}
+
+Transform: "${selection}"`;
 
       try {
         const response = await callGemini(prompt);
-        // Clean response - remove code blocks and extra whitespace
         const cleanResponse = response
           .replace(/```json\n?|\n?```/g, '')
           .replace(/```\n?|\n?```/g, '')
@@ -302,11 +362,19 @@ const MockLLM: LLMApi = {
     return { suggestions: ideas.slice(0, 3) };
   },
   
-  async enhance(selection) {
+  async enhance(selection, modelType: ModelType) {
     await sleep(300);
-    return { 
-      prompt: `${selection} — high quality, ultra detailed, studio lighting, cinematic, cool tones, chiaroscuro, softbox lighting.`
-    };
+    const isSDXL = modelType === 'sdxl';
+    
+    if (isSDXL) {
+      return { 
+        prompt: `portrait of ${selection}, elegant features, confident pose, close-up framing, 85mm lens, soft natural light, warm tones, photographic style, serene mood, highly detailed, sharp focus`
+      };
+    } else {
+      return { 
+        prompt: `A character portrait featuring ${selection}. The subject displays elegant features with a confident pose, captured in natural lighting. The portrait is framed as a close-up shot using an 85mm lens perspective with shallow depth of field. Soft natural light creates gentle shadows from the left side, while warm golden tones convey a sense of serenity and elegance. The style is photographic realism with fine detail and sharp focus, emphasizing natural skin texture and authentic expression.`
+      };
+    }
   },
   
   async alternatives(prompt) {
@@ -556,9 +624,11 @@ function APIKeyInput({ apiKey, setApiKey }: APIKeyInputProps) {
 interface HeaderProps {
   live: boolean;
   setLive: (value: boolean) => void;
+  modelType: ModelType;
+  setModelType: (type: ModelType) => void;
 }
 
-function Header({ live, setLive }: HeaderProps) {
+function Header({ live, setLive, modelType, setModelType }: HeaderProps) {
   return (
     <header className="flex items-center justify-between py-6">
       <div>
@@ -570,7 +640,33 @@ function Header({ live, setLive }: HeaderProps) {
         </p>
       </div>
       
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Model:</span>
+          <div className="flex items-center bg-muted rounded-lg p-1">
+            <button
+              onClick={() => setModelType('sdxl')}
+              className={`px-3 py-1.5 text-sm rounded-md transition-all ${
+                modelType === 'sdxl' 
+                  ? 'bg-background shadow-sm text-foreground' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              SDXL
+            </button>
+            <button
+              onClick={() => setModelType('flux')}
+              className={`px-3 py-1.5 text-sm rounded-md transition-all ${
+                modelType === 'flux' 
+                  ? 'bg-background shadow-sm text-foreground' 
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Flux/Qwen
+            </button>
+          </div>
+        </div>
+        
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
@@ -700,6 +796,7 @@ export function PromptBuilder() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [live, setLive] = useState(true);
   const [apiKey, setApiKey] = useState("");
+  const [modelType, setModelType] = useState<ModelType>("sdxl");
 
   const [selection, setSelection] = useState<string | null>(null);
   const [loadingB, setLoadingB] = useState(false);
@@ -796,7 +893,7 @@ export function PromptBuilder() {
 
     try {
       const llm = getLLM();
-      const enhanced = await llm.enhance(suggestion);
+      const enhanced = await llm.enhance(suggestion, modelType);
       let altResult = await llm.alternatives(enhanced.prompt);
       
       // Fallback: if no tokens from API, extract some basic ones from the text
@@ -818,7 +915,9 @@ export function PromptBuilder() {
       } else {
         // Fallback: use the original suggestion and extract basic tokens
         console.log('API failed, using fallback enhancement and tokens');
-        const fallbackPrompt = `${suggestion} — high quality, ultra detailed, studio lighting, cinematic`;
+        const fallbackPrompt = modelType === 'sdxl' 
+          ? `portrait of ${suggestion}, detailed features, professional lighting, high quality, sharp focus`
+          : `A detailed portrait of ${suggestion}. The subject is captured with professional lighting and careful attention to detail. The composition emphasizes natural beauty with high-quality sharp focus throughout.`;
         const fallbackTokens = extractFallbackTokens(fallbackPrompt);
         const segments = segmentPrompt(fallbackPrompt, fallbackTokens.tokens);
         
@@ -869,7 +968,7 @@ export function PromptBuilder() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <Header live={live} setLive={setLive} />
+      <Header live={live} setLive={setLive} modelType={modelType} setModelType={setModelType} />
 
       {/* API Key Input */}
       <APIKeyInput apiKey={apiKey} setApiKey={setApiKey} />
@@ -990,23 +1089,36 @@ export function PromptBuilder() {
         )}
 
         {/* Token legend */}
-        <div className="flex gap-4 flex-wrap text-xs">
-          <span className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-token-descriptor"></div>
-            Descriptor
+        <div className="flex gap-3 flex-wrap text-xs">
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-token-descriptor"></div>
+            Genre/Setting
           </span>
-          <span className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-token-quality"></div>
-            Quality
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-token-quality"></div>
+            Subject/Composition
           </span>
-          <span className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-token-mood"></div>
-            Mood
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-token-mood"></div>
+            Attributes/Perspective
           </span>
-          <span className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-token-action"></div>
-            Action
+          <span className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-token-action"></div>
+            Action/Lighting/Quality
           </span>
+        </div>
+
+        {/* Model description */}
+        <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+          <div className="font-medium mb-1">
+            {modelType === 'sdxl' ? '📐 SDXL Template' : '📝 Flux/Qwen Prose'}
+          </div>
+          <div>
+            {modelType === 'sdxl' 
+              ? 'Structured format: {GENRE} of {SUBJECT}, {ATTRIBUTES}, {ACTION/SETTING}, {COMPOSITION}, {PERSPECTIVE}, {LIGHTING}, {COLOR}, {STYLE}, {MOOD}, {QUALITY}'
+              : 'Natural prose format: 150-200 words describing purpose, attributes, composition, lighting, and style in flowing sentences.'
+            }
+          </div>
         </div>
       </div>
     </div>
