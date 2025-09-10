@@ -328,23 +328,9 @@ Examples:
 Return JSON format: {"prompt": "structured prompt here"}
 
 Transform: "${selection}"`
-        : `Transform this basic prompt into detailed natural prose for Flux/Qwen. YOU MUST write EXACTLY 180-200 words. Be verbose and descriptive. Structure in these 5 paragraphs:
+        : `Transform this basic prompt into rich descriptive prose for Flux/Qwen. Maximum 150 words. Write natural, flowing description covering subject details, setting, composition, lighting, and style elements.
 
-1. One-line purpose + genre + subject (20-30 words)
-2. Detailed attributes + action + setting with time/place/weather (40-50 words)  
-3. Comprehensive composition & perspective with framing, depth, lens, spacing details (40-50 words)
-4. Detailed lighting & color with type, direction, mood, and specific palette (40-50 words)
-5. Style/medium & quality with technique, textures, and high fidelity details (40-50 words)
-
-EXAMPLE LENGTH: "A character portrait featuring a wise elder as the central subject. The elderly person displays weathered facial features with kind, expressive eyes and a gentle, knowing smile, wearing a worn brown leather jacket that speaks of many adventures. The scene unfolds within a cozy, book-lined library setting during late afternoon, with warm ambient lighting filtering through tall windows, creating a peaceful, contemplative atmosphere.
-
-The composition is carefully framed as an intimate close-up shot, positioning the camera at eye level to create direct connection with the viewer, utilizing shallow depth of field to blur the background bookshelves while maintaining sharp focus on the subject's face and upper torso.
-
-Soft, natural window light streams from the left side, creating gentle shadows that accentuate facial texture and character lines, while subtle rim lighting from behind adds dimension and separation from the warm, golden-toned background environment.
-
-The artistic style emulates photographic realism with meticulous attention to fine skin texture, fabric details, and authentic human expression, rendered with sharp focus and high dynamic range to capture every nuance of character and emotion."
-
-Return JSON format: {"prompt": "your detailed prose here"}
+Return JSON format: {"prompt": "your descriptive prose here"}
 
 Transform: "${selection}"`;
 
@@ -373,25 +359,16 @@ Transform: "${selection}"`;
     },
 
     async alternatives(prompt: string) {
-      const systemPrompt = `Analyze this image generation prompt and identify key tokens that can be replaced with alternatives. Categorize each token using these 12 specific categories:
+      const systemPrompt = `Analyze this image generation prompt and identify key tokens that can be replaced with alternatives. Use diverse categories including:
 
-- genre: Type of image (portrait, landscape, product, etc.)
-- subject: Main subject/object being depicted
-- attributes: Descriptive qualities of the subject
-- action: What the subject is doing
-- setting: Location/environment
-- composition: Framing and visual arrangement
-- perspective: Camera angle, lens type
-- lighting: Light quality, direction, mood
-- color: Color palette, tone, saturation
-- style: Artistic medium, rendering style
-- mood: Emotional atmosphere, feeling
-- quality: Technical quality, detail level
+- genre, subject, attributes, action, setting, composition, perspective, lighting, color, style, mood, quality
+- emotion, texture, weather, time, material, clothing, expression, architecture, nature, technology
+- camera, lens, filter, effect, technique, medium, format, finish, surface, pattern
 
 Return your response as a JSON object with this exact format:
 {"tokens": [{"text": "word", "role": "category", "alts": ["alt1", "alt2", "alt3", "alt4", "alt5", "alt6"]}]}
 
-Provide exactly 6 alternatives for each token. Extract 10-15 tokens across different categories. Focus on the most important and replaceable terms.
+Provide exactly 6 alternatives for each token. Extract 12-20 tokens across different categories. Focus on all replaceable terms including adjectives, nouns, technical terms, and descriptive elements.
 
 Prompt to analyze: "${prompt}"`;
 
