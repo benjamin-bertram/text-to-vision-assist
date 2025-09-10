@@ -328,7 +328,7 @@ Examples:
 Return JSON format: {"prompt": "structured prompt here"}
 
 Transform: "${selection}"`
-        : `Transform this basic prompt into natural prose for Flux/Qwen (150-200 words). Structure in short paragraphs:
+        : `Transform this basic prompt into natural prose for Flux/Qwen (up to 200 words, use full length). Structure in short paragraphs:
 1. One-line purpose + genre + subject
 2. Attributes + action + setting (time/place/weather)  
 3. Composition & perspective (framing, depth, lens, spacing)
@@ -1187,7 +1187,7 @@ export function PromptBuilder() {
           <div>
             {modelType === 'sdxl' 
               ? 'Structured format: {GENRE} of {SUBJECT}, {ATTRIBUTES}, {ACTION/SETTING}, {COMPOSITION}, {PERSPECTIVE}, {LIGHTING}, {COLOR}, {STYLE}, {MOOD}, {QUALITY}'
-              : 'Natural prose format: 150-200 words describing purpose, attributes, composition, lighting, and style in flowing sentences.'
+              : 'Natural prose format: Up to 200 words describing purpose, attributes, composition, lighting, and style in flowing sentences.'
             }
           </div>
         </div>
