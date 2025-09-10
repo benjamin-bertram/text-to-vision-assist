@@ -328,16 +328,23 @@ Examples:
 Return JSON format: {"prompt": "structured prompt here"}
 
 Transform: "${selection}"`
-        : `Transform this basic prompt into natural prose for Flux/Qwen (up to 200 words, use full length). Structure in short paragraphs:
-1. One-line purpose + genre + subject
-2. Attributes + action + setting (time/place/weather)  
-3. Composition & perspective (framing, depth, lens, spacing)
-4. Lighting & color (type, direction, mood, palette)
-5. Style/medium & quality (technique, textures, fidelity)
+        : `Transform this basic prompt into detailed natural prose for Flux/Qwen. YOU MUST write EXACTLY 180-200 words. Be verbose and descriptive. Structure in these 5 paragraphs:
 
-Example: "A character portrait of a wise elder. Weathered face, kind eyes, worn leather jacket, gentle smile. The portrait is placed in a cozy library with warm lamplight, framed as a close-up, camera at eye level, shallow depth of field. Light with soft window light from the left side creating gentle shadows. The image uses warm golden tones to convey comfort and wisdom. Style is photographic realism with fine skin texture and sharp detail."
+1. One-line purpose + genre + subject (20-30 words)
+2. Detailed attributes + action + setting with time/place/weather (40-50 words)  
+3. Comprehensive composition & perspective with framing, depth, lens, spacing details (40-50 words)
+4. Detailed lighting & color with type, direction, mood, and specific palette (40-50 words)
+5. Style/medium & quality with technique, textures, and high fidelity details (40-50 words)
 
-Return JSON format: {"prompt": "natural prose here"}
+EXAMPLE LENGTH: "A character portrait featuring a wise elder as the central subject. The elderly person displays weathered facial features with kind, expressive eyes and a gentle, knowing smile, wearing a worn brown leather jacket that speaks of many adventures. The scene unfolds within a cozy, book-lined library setting during late afternoon, with warm ambient lighting filtering through tall windows, creating a peaceful, contemplative atmosphere.
+
+The composition is carefully framed as an intimate close-up shot, positioning the camera at eye level to create direct connection with the viewer, utilizing shallow depth of field to blur the background bookshelves while maintaining sharp focus on the subject's face and upper torso.
+
+Soft, natural window light streams from the left side, creating gentle shadows that accentuate facial texture and character lines, while subtle rim lighting from behind adds dimension and separation from the warm, golden-toned background environment.
+
+The artistic style emulates photographic realism with meticulous attention to fine skin texture, fabric details, and authentic human expression, rendered with sharp focus and high dynamic range to capture every nuance of character and emotion."
+
+Return JSON format: {"prompt": "your detailed prose here"}
 
 Transform: "${selection}"`;
 
