@@ -350,10 +350,19 @@ Transform: "${selection}"`;
 
       try {
         const response = await callGemini(prompt);
-        const cleanResponse = response
+        let cleanResponse = response
           .replace(/```json\n?|\n?```/g, '')
           .replace(/```\n?|\n?```/g, '')
           .trim();
+        
+        // Handle potential JSON parsing issues by finding the JSON object
+        const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleanResponse = jsonMatch[0];
+        }
+        
+        // Clean up control characters in the JSON string values
+        cleanResponse = cleanResponse.replace(/\\n/g, '\\n').replace(/\\r/g, '\\r').replace(/\\t/g, '\\t');
         
         const parsed = JSON.parse(cleanResponse);
         return { prompt: parsed.prompt || selection };
