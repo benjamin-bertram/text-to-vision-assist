@@ -239,7 +239,7 @@ function inferRole(text: string): TokenRole {
 
 // Google Gemini API integration
 function createGoogleLLM(apiKey: string): LLMApi {
-  const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
   
   async function callGemini(prompt: string): Promise<string> {
     const response = await fetch(baseUrl, {
